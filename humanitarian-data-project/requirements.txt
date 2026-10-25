@@ -1,0 +1,13 @@
+# Core pipeline (required)
+pandas>=2.0
+numpy>=1.24
+requests>=2.31
+matplotlib>=3.7
+openpyxl>=3.1          # read the EM-DAT Excel workbook from UN HDX
+
+# Optional extras
+# geopandas>=0.14      # enables the choropleth version of Figure 2
+# shapely              # (geopandas dependency)
+# plotly>=5.18         # interactive figures / Streamlit dashboards
+# jupyterlab           # exploratory notebook workflow
+# streamlit            # country explorer app (extension challenge #4)
