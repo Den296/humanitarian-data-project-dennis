@@ -68,6 +68,25 @@ WB_INDICATORS = {
 }
 
 
+def fetch_country_registry():
+    """Save the World Bank country list and mark which entries are real
+    sovereign countries (region != 'Aggregates'). This registry lets us
+    drop synthetic codes like WLD/SSA/HPC and pseudo-country territories
+    (Aruba, Curacao, Kosovo...) whose indicator values are often blank or
+    distorted, keeping the analysis honest."""
+    url = "https://api.worldbank.org/v2/country?format=json&per_page=400"
+    meta, rows = get(url).json()
+    df = pd.json_normalize(rows)[["id", "iso2Code", "name", "region.value"]]
+    df = df.rename(columns={"region.value": "region"})
+    # Aggregate pseudo-countries (WLD, IDA, SSA, HPC...) live in the
+    # "Aggregates" region; real members belong to a geographic region.
+    df["is_real_country"] = ~df["region"].fillna("").str.strip().eq("Aggregates")
+    keep = df[(df["id"].str.len() == 3) & df["is_real_country"]][["id", "name"]] \
+        .rename(columns={"id": "iso3", "name": "country"})
+    keep.to_csv(DATA / "real_countries.csv", index=False)
+    print(f"Saved real_countries.csv ({len(keep)} countries)")
+
+
 def fetch_worldbank():
     frames = []
     for code, name in WB_INDICATORS.items():
@@ -199,6 +218,7 @@ def fetch_unhcr():
 
 
 if __name__ == "__main__":
+    print("[0/4] World Bank country registry ..."); fetch_country_registry()
     print("[1/3] World Bank Open Data ...");    fetch_worldbank()
     print("[2/3] EM-DAT via UN HDX ...");       fetch_emdat()
     print("[3/3] UNHCR Population API ...");    fetch_unhcr()

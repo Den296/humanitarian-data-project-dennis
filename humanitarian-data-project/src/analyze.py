@@ -95,6 +95,21 @@ def build_panel(wb, em, dp):
                   .merge(health, on="iso3", how="left")
                   .merge(disp, on="iso3", how="left"))
     panel = panel[panel["gdp_per_capita"].notna()]      # drop aggregates/no-data
+    # Keep only sovereign countries (drops regional aggregates like AFE/SAS,
+    # small territories like ABW/CUW and special entries like PSW/PST) so the
+    # composite ranking in Figure 4 is fair and comparable.
+    registry = DATA / "real_countries.csv"
+    if registry.exists():
+        real = set(pd.read_csv(registry)["iso3"])
+        before = len(panel)
+        panel = panel[panel["iso3"].isin(real)]
+        # A meaningful composite score needs at least 3 of the 4 factors;
+        # micro-territories with sparse data would distort the percentiles.
+        crit = ["hazard_events_per_year", "under5_mortality",
+                "undernourishment", "refugees_per_1000"]
+        panel = panel[panel[crit].notna().sum(axis=1) >= 3]
+        print(f"Filtered {before - len(panel)} aggregate/territory/sparse rows; "
+              f"{len(panel)} countries remain")
 
     # Long-format panel with yearly values (for trend charts)
     yearly = (wb.merge(haz[["iso3", "year", "events", "affected"]],
@@ -241,8 +256,15 @@ if __name__ == "__main__":
     fig3_scatter(panel)
     fig4_top(panel)
     corr = panel[["gdp_per_capita", "under5_mortality"]].dropna().corr().iloc[0, 1]
+    d = panel.dropna(subset=["gdp_per_capita", "under5_mortality"])
+    log_corr = np.corrcoef(np.log10(d["gdp_per_capita"]),
+                           np.log10(d["under5_mortality"]))[0, 1]
     print(f"\nKey numbers for the report:")
-    print(f"- Pearson correlation GDP-per-capita vs under-5 mortality: {corr:.2f} "
-          f"(on raw scales; strongly negative)")
+    print(f"- Pearson correlation GDP-per-capita vs under-5 mortality: {corr:.2f} raw, "
+          f"{log_corr:.2f} on log-log scale (the relationship is strongly non-linear)")
+    top_disp = panel.nlargest(3, "refugees_per_1000")[["country", "refugees_per_1000"]]
+    print("- Highest refugee burden per capita:",
+          ", ".join(f"{r.country} ({r.refugees_per_1000:.0f}/1k)"
+                    for r in top_disp.itertuples()))
     print(f"- Figure 2 rendered as: {kind}")
     print("Figures saved to ./figures/")
